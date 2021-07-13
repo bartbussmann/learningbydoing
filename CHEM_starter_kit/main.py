@@ -10,6 +10,7 @@ import hyperopt
 from zipfile import ZipFile
 
 
+
 def load_all_training_data():
     path = '../CHEM_trainingdata'
     all_files = glob.glob(path + "/*.csv")
@@ -79,7 +80,7 @@ def get_X18_X19_X20_predictor_trainingset(df):
     return np.asarray(x_list), np.asarray(y_list)
 
 def train_random_forest(x, y):
-    regressor = RandomForestRegressor()
+    regressor = RandomForestRegressor(n_estimators=200)
     regressor.fit(x, y)
     return regressor
 
@@ -194,6 +195,7 @@ def make_submission(training_df, submission_df):
     ZipFile('submission.zip', mode='w').write('submission.csv')
 
 
+np.random.seed(1)
 training_df = load_all_training_data()
 submission_df = load_submission_data()
 make_submission(training_df, submission_df)
