@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import hyperopt
 from zipfile import ZipFile
 import multiprocessing
+from sklearn.model_selection import cross_val_score
 
 import time
 
@@ -85,7 +86,11 @@ def get_X18_X19_X20_predictor_trainingset(df):
 
 def train_random_forest(x, y):
     # regressor = RandomForestRegressor(n_estimators=200)
-    regressor = MLPRegressor(max_iter=50000)
+    regressor = MLPRegressor(max_iter=50000, hidden_layer_sizes=(2048,))
+    # regressor = LinearRegression()
+    scores = cross_val_score(regressor, x, y, cv=10, scoring='neg_mean_squared_error')
+    print(-np.mean(scores))
+    print(-scores)
     regressor.fit(x, y)
     return regressor
 
@@ -163,10 +168,11 @@ def find_u_vector_with_lowest_loss_genetic(initial_data, regressor1, regressor2,
     t = time.time()
     best = np.zeros(8)
     u_vector = best
+    scales = [2, 0.5, 0.01]
     prediction = get_prediction_for_target_values(initial_data, u_vector, regressor1, regressor2)
     best_loss = approximation_loss(prediction, target, u_vector)
-    for i in range(10):
-        children = [get_child(best) for j in range(children_per_generation)]
+    for i in range(3):
+        children = [get_child(best, scale=scales[i]) for j in range(children_per_generation)]
         list_of_inputs = [(initial_data, children[j], regressor1, regressor2) for j in range(children_per_generation)]
         with multiprocessing.Pool(processes=8) as pool:
             predictions = pool.starmap(get_prediction_for_target_values, list_of_inputs)
@@ -174,17 +180,28 @@ def find_u_vector_with_lowest_loss_genetic(initial_data, regressor1, regressor2,
         losses = [approximation_loss(predictions[j], target, children[j]) for j in range(children_per_generation)]
         best_index = np.argmin(losses)
         best_child_of_generation = children[best_index]
+
+        min_loss = np.min(losses)
+        for i in range(8):
+            best_child_of_generation_copy = best_child_of_generation.copy()
+            best_child_of_generation_copy[i] = 0
+            prediction = get_prediction_for_target_values(initial_data, best_child_of_generation_copy, regressor1, regressor2)
+            new_loss = approximation_loss(prediction, target, best_child_of_generation_copy)
+            if new_loss < min_loss:
+                min_loss = new_loss
+                best_child_of_generation = best_child_of_generation_copy
+
         if approximation_loss(predictions[best_index], target, best_child_of_generation) < best_loss:
             best_loss = approximation_loss(prediction, target, best_child_of_generation)
             best = best_child_of_generation
     print('time', time.time() - t)
     return best
 
-def get_child(best):
+def get_child(best, scale=1):
     child = best.copy()
     bit_to_change = np.random.randint(8)
-    child += np.random.normal(size=8)
-    return child
+    child += np.random.normal(0, scale, size=8)
+    return np.clip(child, -10, 10)
 
 def objective(space):
     initial_data = space['initial_data']
@@ -213,20 +230,20 @@ def make_submission(training_df, submission_df):
     target_list = submission_data_to_list_of_targets(submission_df)
 
     x, y = get_X4_predictor_trainingset(training_df)
-    x_train, x_val, y_train, y_val = get_train_val_split(x, y, percentage=0.10)
+    # x_train, x_val, y_train, y_val = get_train_val_split(x, y, percentage=0.10)
     regressor1 = train_random_forest(x, y)
-    mse = np.mean((y_train - regressor1.predict(x_train)) ** 2)
-    mse_val = np.mean((y_val - regressor1.predict(x_val)) ** 2)
+    # mse = np.mean((y_train - regressor1.predict(x_train)) ** 2)
+    # mse_val = np.mean((y_val - regressor1.predict(x_val)) ** 2)
     # assert(mse_val < 0.10)
-    print(mse, mse_val)
+    # print(mse, mse_val)
 
     x, y = get_X18_X19_X20_predictor_trainingset(training_df)
-    x_train, x_val, y_train, y_val = get_train_val_split(x, y, percentage=0.10)
+    # x_train, x_val, y_train, y_val = get_train_val_split(x, y, percentage=0.10)
     regressor2 = train_random_forest(x, y)
-    mse = np.mean((y_train - regressor2.predict(x_train)) ** 2)
-    mse_val = np.mean((y_val - regressor2.predict(x_val)) ** 2)
+    # mse = np.mean((y_train - regressor2.predict(x_train)) ** 2)
+    # mse_val = np.mean((y_val - regressor2.predict(x_val)) ** 2)
     # assert(mse_val < 0.20)
-    print(mse, mse_val)
+    # print(mse, mse_val)
 
     for i, row in submission_df.iterrows():
         print(i)
@@ -246,6 +263,8 @@ def plot_all_timeseries(df):
             plt.plot(instance_df["t"], instance_df[f"X{i}"])
         plt.show()
 
+
+#TODO system to one-hot-vector
 np.random.seed(1)
 training_df = load_all_training_data()
 # plot_all_timeseries(training_df)
