@@ -159,13 +159,13 @@ def find_u_vector_with_lowest_loss(initial_data, regressor1, regressor2, target)
         return space
 
 
-def find_u_vector_with_lowest_loss_genetic(initial_data, regressor1, regressor2, target, children_per_generation=5000):
+def find_u_vector_with_lowest_loss_genetic(initial_data, regressor1, regressor2, target, children_per_generation=2500):
     t = time.time()
     best = np.zeros(8)
     u_vector = best
     prediction = get_prediction_for_target_values(initial_data, u_vector, regressor1, regressor2)
     best_loss = approximation_loss(prediction, target, u_vector)
-    for i in range(3):
+    for i in range(10):
         children = [get_child(best) for j in range(children_per_generation)]
         list_of_inputs = [(initial_data, children[j], regressor1, regressor2) for j in range(children_per_generation)]
         with multiprocessing.Pool(processes=8) as pool:
